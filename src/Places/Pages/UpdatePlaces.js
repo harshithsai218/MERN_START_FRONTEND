@@ -1,142 +1,134 @@
-import React,{useEffect,useState} from "react";
-import { useParams } from "react-router-dom";
+import React,{useEffect,useState,useContext} from "react";
+import { useParams,useHistory } from "react-router-dom";
 
 import Input from "../../Shared/Components/FormElements/Input";
 import Button from "../../Shared/Components/FormElements/Button";
 import Card from "../../Shared/Components/UIElements/Card";
+import ErrorModal from "../../Shared/Components/UIElements/ErrorModal";
+import LoadingSpinner from "../../Shared/Components/UIElements/LoadingSpinner";
 import { VALIDATOR_REQUIRE,VALIDATOR_MINLENGTH } from "../../Shared/util/validators";
 import { useForm } from "../../Shared/hooks/form-hook";
+import {useHttpClients} from "../../Shared/hooks/http-hook";
+import { AuthContext } from "../../Shared/Context/Auth-context";
 import "./PlaceForm.css"
 
-const Dummy_Places=[
-    {
-        id:'p1',
-        title:'funnel hill',
-        description:'waffle place',
-        imageUrl:"https://www.mappls.com/place/K9SLBP_1668488163176.jpg",
-        address:'beside More Super Market, Defence Colony, Sainikpuri, Hyderabad, Secunderabad, Telangana 500036',
-        location:{
-            lat: 40.748817,
-            lng: -73.985428
-        },
-        creator:'u1'
-    },
-    {
-        id:'p2',
-        title:'funnel hill 222',
-        description:'waffle place',
-        imageUrl:'https://www.mappls.com/place/K9SLBP_1668488163176.jpg',
-        address:'beside More Super Market, Defence Colony, Sainikpuri, Hyderabad, Secunderabad, Telangana 500036',
-        location:{
-            lat: 40.748817,
-            lng: -73.985428
-        },
-        creator:'u2'
-}
-]
-
 const UpdatePlace = () => {
- const [isLoading,setIsLoading] =useState(true);
-  const placeId = useParams().placeId;    
-  
-  const [formState,inputHandler,setFormData]=useForm({
-    title:{
-        value : '',
-        isValid : false
-    },
-    description:{
-        value:'',
-        isValid:false
-    },
-    // address:{
-    //     value:identifiedPlace.address,
-    //     isValid:true
-    // }
-  },false);
+  const auth = useContext(AuthContext);
+  const { isLoading, error, sendRequest, clearError } = useHttpClients();
+  const [loadedPlace, setLoadedPlace] = useState();
+  const placeId = useParams().placeId;
+  const history = useHistory();
 
-  
-const identifiedPlace = Dummy_Places.find(p => p.id === placeId);
+  const [formState, inputHandler, setFormData] = useForm(
+    {
+      title: {
+        value: '',
+        isValid: false
+      },
+      description: {
+        value: '',
+        isValid: false
+      }
+    },
+    false
+  );
 
-useEffect(()=>{
-    if(identifiedPlace){
-        setFormData({
-            title:{
-                value:identifiedPlace.title,
-                isValid:true
+  useEffect(() => {
+    const fetchPlace = async () => {
+      try {
+        const responseData = await sendRequest(
+          `http://localhost:5000/api/places/${placeId}`
+        );
+        setLoadedPlace(responseData.place);
+        setFormData(
+          {
+            title: {
+              value: responseData.place.title,
+              isValid: true
             },
-            description:{
-                value:identifiedPlace.description,
-                isValid:true
+            description: {
+              value: responseData.place.description,
+              isValid: true
             }
-        },true);
-    }
-    
-    setIsLoading(false);
-},[setFormData,identifiedPlace]);
+          },
+          true
+        );
 
+      } catch (err) {}
+    };
+    fetchPlace();
+  }, [sendRequest, placeId, setFormData]);
 
-const placeUpdateSubmitHandler = event =>{
+  const placeUpdateSubmitHandler = async event => {
     event.preventDefault();
-        console.log(formState.inputs)
-};
+    try {
+      await sendRequest(
+        `http://localhost:5000/api/places/${placeId}`,
+        'PATCH',
+        JSON.stringify({
+          title: formState.inputs.title.value,
+          description: formState.inputs.description.value
+        }),
+        {
+          'Content-Type': 'application/json'
+        }
+      );
+      history.push('/' + auth.userId + '/places');
+    } catch (err) {}
+  };
 
-  if (!identifiedPlace) {
+  if (isLoading) {
+    return (
+      <div className="center">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  if (!loadedPlace && !error) {
     return (
       <div className="center">
         <Card>
-             <h2>Could not find place!</h2>
+          <h2>Could not find place!</h2>
         </Card>
       </div>
     );
   }
 
-  if(isLoading){
-    return (
-        <div className="center">
-          <h2>Loading....</h2>
-        </div>
-      );
-  }
   return (
-    
-    <form className="place-form" onSubmit={placeUpdateSubmitHandler}>
-      <Input
-        id="title"
-        element="input"
-        type="text"
-        label="title"
-        validators={[VALIDATOR_REQUIRE()]}
-        errorText="Please enter a valid title."
-        onInput={inputHandler}
-        initailValue={formState.inputs.title.value}
-        initailValid={formState.inputs.title.isValid}
-      />
-      <Input
-        id="description"
-        element="textarea"
-        label="Description"
-        validators={[VALIDATOR_MINLENGTH(5)]}
-        errorText="Please enter a valid description (min. 5 characters)."
-        onInput={inputHandler}
-        initailValue={formState.inputs.description.value}
-        initailValid={formState.inputs.description.isValid}
-      />
-      {/* <Input
-        id="address"
-        element="textarea"
-        label="Address"
-        validators={[VALIDATOR_REQUIRE()]}
-        errorText="Please enter a valid address)."
-        onInput={inputHandler}
-        initailValue={formState.inputs.address.value}
-        initailValid={formState.inputs.address.isValid}
-      /> */}
-      <Button type="submit" disabled={!formState.isValid}>
-        UPDATE PLACE
-      </Button>
-    </form>
-    
+    <React.Fragment>
+      <ErrorModal error={error} onClear={clearError} />
+      {!isLoading && loadedPlace && (
+        <form className="place-form" onSubmit={placeUpdateSubmitHandler}>
+          <Input
+            id="title"
+            element="input"
+            type="text"
+            label="Title"
+            validators={[VALIDATOR_REQUIRE()]}
+            errorText="Please enter a valid title."
+            onInput={inputHandler}
+            initialValue={loadedPlace.title}
+            initialValid={true}
+          />
+          <Input
+            id="description"
+            element="textarea"
+            label="Description"
+            validators={[VALIDATOR_MINLENGTH(5)]}
+            errorText="Please enter a valid description (min. 5 characters)."
+            onInput={inputHandler}
+            initialValue={loadedPlace.description}
+            initialValid={true}
+          />
+          <Button type="submit" disabled={!formState.isValid}>
+            UPDATE PLACE
+          </Button>
+        </form>
+      )}
+    </React.Fragment>
   );
 };
+
 
 export default UpdatePlace;

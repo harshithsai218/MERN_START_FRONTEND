@@ -1,114 +1,63 @@
-import React from "react";
+import React,{useContext} from "react";
+import { useHistory } from 'react-router-dom';
 
 import Input from "../../Shared/Components/FormElements/Input";
 import Button from "../../Shared/Components/FormElements/Button";
+import ErrorModal from "../../Shared/Components/UIElements/ErrorModal";
+import LoadingSpinner from "../../Shared/Components/UIElements/LoadingSpinner";
 import { VALIDATOR_MINLENGTH,VALIDATOR_REQUIRE } from "../../Shared/util/validators";
 import { useForm } from "../../Shared/hooks/form-hook";
+import {useHttpClients} from "../../Shared/hooks/http-hook";
+import { AuthContext } from "../../Shared/Context/Auth-context";
 import "./PlaceForm.css"
 
-// const formReducer =(state, action)=>{
-//     switch(action.type){
-//         case 'INPUT_CHANGE':
-//             let formIsValid = true;
-//             for(const inputId in state.inputs){
-//                 if (inputId === action.inputId){
-//                     formIsValid=formIsValid && action.isValid;
-//                 }
-//                 else{
-//                     formIsValid=formIsValid && state.inputs[inputId].isValid;   
-//                 }
-//             }
-//             return {
-//                 ...state,
-//                 input:{
-//                     ...state.inputs,
-//                     [action.inputId]:{value:action.value,isValid: action.isValid}
-//                 },
-//                 isValid:formIsValid
 
-//             };
-//         default:
-//             return state;
-        
-//     }
-// };
-// const NewPlaces = () =>{
-// const [formState,dispatch]=useReducer(formReducer,{
-//     input:{
-//         title:{
-//             value:'',
-//             isValid:false
-//         },
-//         description:{
-//             value:'',
-//             isValid:false
-//         }
-//     },
-//     isValid: false
-// })
-// const inputHandler = useCallback((id, value, isValid) => {
-//     dispatch({
-//       type: 'INPUT_CHANGE',
-//       value: value,
-//       isValid: isValid,
-//       inputId: id
-//     });
-//   }, []);
+const NewPlace = () => {
+  const auth = useContext(AuthContext);
+  const { isLoading, error, sendRequest, clearError } = useHttpClients();
+  const [formState, inputHandler] = useForm(
+    {
+      title: {
+        value: '',
+        isValid: false
+      },
+      description: {
+        value: '',
+        isValid: false
+      },
+      address: {
+        value: '',
+        isValid: false
+      }
+    },
+    false
+  );
 
-//     return (
-//         <form className="place-form">
-//         <Input 
-//         id="title"
-//         element="input" 
-//         type="text" 
-//         label="Title" 
-//         validators={[VALIDATOR_REQUIRE()]} 
-//         errorText="Please enter a valid title."
-//         onInput={inputHandler}
-//         />
-//         <Input 
-//         id="description"
-//         element="textArea" 
-//         label="Description" 
-//         validators={[VALIDATOR_MINLENGTH(5)]} 
-//         errorText="Please enter a valid description(atleast of 5 characters)."
-//         onInput={inputHandler}
-//         />
-//         <Button type="submit" disabled={formState.isValid}>
-//             ADD PLACE
-//         </Button>
-//     </form>
-//     );
-// };
+  const history = useHistory();
 
-// export default NewPlaces;  
-  
-  const NewPlaces = () => { 
-    const [formState,inputHandler] = useForm(
-        {
-            title: {
-                value: '',
-                isValid: false
-              },
-              description: {
-                value: '',
-                isValid: false
-              },
-              address: {
-                value: '',
-                isValid: false
-              }
-        },false);
-  
-    
+  const placeSubmitHandler = async event => {
+    event.preventDefault();
+    try {
+      await sendRequest(
+        'http://localhost:5000/api/places',
+        'POST',
+        JSON.stringify({
+          title: formState.inputs.title.value,
+          description: formState.inputs.description.value,
+          address: formState.inputs.address.value,
+          creator: auth.userId
+        }),
+        { 'Content-Type': 'application/json' }
+      );
+      history.push('/');
+    } catch (err) {}
+  };
 
-    const placeSubmitHandler = event =>{
-        event.preventDefault();
-        console.log(formState.inputs)//send to back end
-    };
-  
-    return (
+  return (
+    <React.Fragment>
+      <ErrorModal error={error} onClear={clearError} />
       <form className="place-form" onSubmit={placeSubmitHandler}>
+        {isLoading && <LoadingSpinner asOverlay />}
         <Input
           id="title"
           element="input"
@@ -128,17 +77,18 @@ import "./PlaceForm.css"
         />
         <Input
           id="address"
-          element="textarea"
+          element="input"
           label="Address"
           validators={[VALIDATOR_REQUIRE()]}
-          errorText="Please enter a valid address"
+          errorText="Please enter a valid address."
           onInput={inputHandler}
         />
         <Button type="submit" disabled={!formState.isValid}>
           ADD PLACE
         </Button>
       </form>
-    );
-  };
-  
-  export default NewPlaces; 
+    </React.Fragment>
+  );
+};
+
+export default NewPlace;
